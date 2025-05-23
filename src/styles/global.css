@@ -368,3 +368,18 @@ body {
 .search-result-item:hover {
     background: #3c4043;
 }
+
+.footer {
+  width: 100%;
+  text-align: center;
+  color: #9aa0a6;
+  font-size: 15px;
+  padding: 18px 0 10px 0;
+  background: transparent;
+  position: fixed;
+  left: 0;
+  bottom: 0;
+  z-index: 10;
+  letter-spacing: 0.5px;
+  user-select: none;
+}

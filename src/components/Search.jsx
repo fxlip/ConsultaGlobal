@@ -139,7 +139,7 @@ export default function Search() {
   const [inputType, setInputType] = useState('text'); 
   const [isValid, setIsValid] = useState(null); 
   const [inputMode, setInputMode] = useState(null); 
-  const debouncedQuery = useDebounce(query, 300);
+  const debouncedQuery = useDebounce(query, 100);
   const [results, setResults] = useState([]);
   const [suggestions, setSuggestions] = useState([]); // Para sugestões de sobrenomes
   const [showSuggestions, setShowSuggestions] = useState(false); // Controla a exibição das sugestões
