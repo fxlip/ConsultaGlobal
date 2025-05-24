@@ -9,7 +9,7 @@ Desenvolvido em [React](https://react.dev/) com [Vite](https://vitejs.dev/) e ex
 - Valida todos os formatos numéricos e de email diretamente no input.
 - Formata nomes com a primeira letra maiúscula.
 - Mostra resultados de busca em tempo real.
-- Layout minimalista adaptado para desktop e mobile.
+- Layout minimalista e responsivo.
 
 ## Estrutura
 
