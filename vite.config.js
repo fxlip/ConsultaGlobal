@@ -3,7 +3,17 @@ import react from '@vitejs/plugin-react';
 import path from 'path';
 import htmlFormatPlugin from './plugin-format';
 import fs from 'fs';
-const version = fs.readFileSync('../VERSION', 'utf-8').trim();
+
+const versionFilePath = path.resolve(__dirname, './VERSION'); // Alterado de './shared/VERSION'
+let appVersion = 'N/A';
+
+if (fs.existsSync(versionFilePath)) {
+  appVersion = fs.readFileSync(versionFilePath, 'utf-8').trim();
+} else {
+  console.warn(`Arquivo de versão não encontrado em: ${versionFilePath}. Será usado 'N/A'.`);
+  console.warn(`Certifique-se que o script de deploy baixa o arquivo VERSION para a raiz do projeto frontend.`);
+}
+
 
 export default defineConfig({
   plugins: [
@@ -49,6 +59,6 @@ export default defineConfig({
     },
   },
   define: {
-    __APP_VERSION__: JSON.stringify(version),
+    __APP_VERSION__: JSON.stringify(appVersion),
   },
 });
