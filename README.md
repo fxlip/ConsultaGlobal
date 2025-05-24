@@ -4,7 +4,7 @@ Desenvolvido em [React](https://react.dev/) com [Vite](https://vitejs.dev/) e ex
 
 ## Features
 
-- Permite buscas por nome, CPF, CNPJ, celular e e-mail.
+- Permite buscas por nome, celular e e-mail.
 - Faz requisições para o backend via rotas `/api`.
 - Valida todos os formatos numéricos e de email diretamente no input.
 - Formata nomes com a primeira letra maiúscula.
