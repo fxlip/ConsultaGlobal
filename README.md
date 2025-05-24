@@ -15,7 +15,7 @@ Desenvolvido em [React](https://react.dev/) com [Vite](https://vitejs.dev/) e ex
 
 ```
 /
-├── public/           # Arquivos estáticos (fonts, favicon)
+├── public/           # Arquivos estáticos
 ├── src/              # Código-fonte React
 │   ├── components/   # Componentes reutilizáveis
 │   ├── pages/        # Páginas principais
