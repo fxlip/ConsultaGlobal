@@ -1,0 +1,385 @@
+@font-face {
+    font-family: 'default';
+    src: url('/fonts/ProductSans-Regular.ttf') format('truetype');
+    font-weight: normal;
+    font-style: normal;
+}
+
+@font-face {
+    font-family: 'default';
+    src: url('/fonts/ProductSans-Bold.ttf') format('truetype');
+    font-weight: bold;
+    font-style: normal;
+}
+
+@font-face {
+    font-family: 'default';
+    src: url('/fonts/ProductSans-Italic.ttf') format('truetype');
+    font-weight: normal;
+    font-style: italic;
+}
+
+@font-face {
+    font-family: 'default';
+    src: url('/fonts/ProductSans-BoldItalic.ttf') format('truetype');
+    font-weight: bold;
+    font-style: italic;
+}
+
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+html, body {
+    width: 100%;
+    height: 100%;
+    background-color: #101218;
+    font-family: 'default', sans-serif; 
+}
+
+body {
+    display: flex;
+    min-height: 100vh;
+}
+
+#root {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+}
+
+.home-container {
+    background-color: #101218;
+    min-height: 86vh;
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    padding: 20px;
+}
+
+.home-title {
+    color: white;
+    margin-bottom: 30px;
+    font-size: 65px;
+    font-family: 'default', sans-serif;
+    font-weight: bold;
+}
+
+/* Estilos para o componente Search */
+.search-wrapper {
+    width: 100%;
+    max-width: 584px;
+    margin-top: 6px;
+    margin-bottom: 13%;
+}
+  
+.search-container {
+    display: flex;
+    align-items: center;
+    height: 52px;
+    padding: 0 15px;
+    background: #2e313b;
+    border: 0px solid #2e313b;
+    border-radius: 26px;
+    transition: background 0.2s, border-color 0.2s, border-radius 0.2s, box-shadow 0.2s;
+    position: relative;
+}
+
+.search-container:hover,
+.search-container:focus-within {
+    background: #2e313b;
+    border-color: #2e313b;
+    box-shadow: 0 1px 6px 0 #171717;
+}
+
+.search-container:focus-within .search-icon svg {
+    color: #e8eaed;
+}
+
+.search-container.with-suggestions {
+    border-radius: 26px 26px 0 0;
+    border-bottom-color: transparent;
+}
+
+.search-icon {
+    display: flex;
+    align-items: center;
+    padding-right: 13px;
+    margin-left: -1px;
+}
+
+.search-icon svg {
+    color: #9aa0a6;
+    height: 20px;
+    width: 20px;
+}
+
+.search-input {
+    flex: 1;
+    background: transparent;
+    border: none;
+    color: #e8eaed;
+    font-size: 16px;
+    outline: none;
+    padding: 0;
+    margin: 0;
+    height: 100%;
+}
+
+.search-input.valid-format {
+    color: #0aff19;
+}
+
+.search-input.invalid-format {
+    color: #9aa0a6;
+}
+
+.search-input::placeholder {
+    color: #9aa0a6;
+}
+
+/* Modifique o estilo do input durante loading para dar feedback visual */
+.search-input.loading {
+    cursor: wait !important;
+    caret-color: transparent !important; /* Esconde o cursor de texto */
+    user-select: none; /* Previne seleção de texto durante loading */
+}
+
+/* Adicione transição suave para as sugestões */
+.search-suggestions {
+    position: absolute;
+    z-index: 100;
+    width: 100%;
+    max-width: 584px;
+    margin-top: -1px;
+    background: #2e313b;
+    border-radius: 0 0 26px 26px;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+    overflow: hidden;
+    padding-top: 4px;
+    transition: opacity 0.25s ease-out, transform 0.25s ease-out;
+    transform-origin: top center;
+    opacity: 1;
+    visibility: visible;
+    transform: translateY(0);
+}
+
+/* Crie uma animação de entrada para as sugestões */
+@keyframes suggestionsAppear {
+    from {
+        opacity: 0;
+        transform: translateY(-10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* Aplique a animação às sugestões quando aparecem */
+.search-suggestions {
+    animation: suggestionsAppear 0.2s ease-out forwards;
+}
+
+/* Pseudo-elemento para estender o background por trás dos itens */
+.search-suggestions::after {
+    content: '';
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 26px; /* Altura correspondente ao border-radius */
+    background: #2e313b;
+    border-radius: 0 0 26px 26px;
+    z-index: 1;
+}
+
+/* Garantir que todo o conteúdo das sugestões esteja acima do pseudo-elemento */
+.suggestion-item, .suggestions-header {
+    position: relative;
+    z-index: 2;
+}
+
+.suggestions-header {
+    border-top: 1px solid #5f6368;
+    margin: -4px 20px 0 14px;
+    padding-bottom: 8px;
+}
+
+.suggestion-item {
+    display: flex;
+    align-items: center;
+    padding:7px 0 7px 14px;
+    cursor: pointer;
+    transition: background-color 0.2s;
+}
+
+/* Ajuste para o último item da lista de sugestões */
+.suggestion-item:last-child {
+    position: relative;
+    z-index: 5; /* Garante que o conteúdo fique acima do background */
+    margin-bottom: 10px; /* Espaço extra no último item */
+}
+
+.suggestion-item:hover {
+    background-color: #4d5160;
+}
+
+.suggestion-avatar {
+    width: 32px;
+    height: 32px;
+    min-width: 32px;
+    border-radius: 4px;
+    margin-right: 12px;
+    background-size: cover;
+    background-position: center;
+    background-color: #555;
+}
+
+.suggestion-content {
+    flex: 1;
+    overflow: hidden;
+}
+
+.suggestion-name {
+    color: #e8eaed;
+    font-size: 16px;
+    margin-bottom: 2px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.suggestion-description {
+    color: #9aa0a6;
+    font-size: 13px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.clear-button {
+    display: flex;
+    align-items: center;
+    background: transparent;
+    border: none;
+    padding: 0 8px;
+    margin-left: 12px;
+    cursor: pointer;
+}
+
+.clear-button svg {
+    fill: #9aa0a6;
+    height: 24px;
+    width: 24px;
+}
+
+.clear-button:hover svg {
+    fill: #e8eaed;
+}
+
+/* Loader circular */
+.loader {
+    position: relative;
+    width: 24px;
+    height: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-left: 12px;
+    margin-right: 8px;
+}
+  
+.circular {
+    animation: rotate 2s linear infinite;
+    height: 100%;
+    transform-origin: center center;
+    width: 100%;
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    margin: auto;
+}
+  
+.path {
+    stroke-dasharray: 1, 200;
+    stroke-dashoffset: 0;
+    animation: dash 1.5s ease-in-out infinite, color 6s ease-in-out infinite;
+    stroke-linecap: round;
+}
+  
+@keyframes rotate {
+    100% {
+        transform: rotate(360deg);
+    }
+}
+  
+@keyframes dash {
+    0% {
+        stroke-dasharray: 1, 200;
+        stroke-dashoffset: 0;
+    }
+    50% {
+        stroke-dasharray: 89, 200;
+        stroke-dashoffset: -35;
+    }
+    100% {
+        stroke-dasharray: 89, 200;
+        stroke-dashoffset: -124;
+    }
+}
+  
+@keyframes color {
+    0%, 100% {
+        stroke: #9aa0a6;
+    }
+    40% {
+        stroke: #9aa0a6;
+    }
+    66% {
+        stroke: #9aa0a6;
+    }
+    80%, 90% {
+        stroke: #9aa0a6;
+    }
+}
+
+.search-results {
+    margin-top: 8px;
+    background: #303134;
+    border-radius: 8px;
+    box-shadow: 0 2px 6px 0 #171717;
+}
+
+.search-result-item {
+    padding: 12px 16px;
+    color: #e8eaed;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+
+.search-result-item:hover {
+    background: #3c4043;
+}
+
+.footer {
+  width: 100%;
+  text-align: center;
+  color: #9aa0a6;
+  font-size: 15px;
+  padding: 18px 0 10px 0;
+  background: transparent;
+  position: fixed;
+  left: 0;
+  bottom: 0;
+  z-index: 10;
+  letter-spacing: 0.5px;
+  user-select: none;
+}
