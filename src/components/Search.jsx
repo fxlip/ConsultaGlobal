@@ -96,7 +96,7 @@ const isValidCelular = (celular) => {
 const isValidEmail = (email) => {
   if (!email) return false;
   // Regex simples para validação de email
-  const emailRegex = /^[a-z0-9._-]+@[a-z0-9.-]+\.[a-z]{2,}$/i;
+  const emailRegex = /^(?=.{1,64}@)[a-zA-Z0-9_-]+(\.[a-zA-Z0-9_-]+)*@[^-][a-zA-Z0-9-]+(\.[a-zA-Z0-9-]+)*(\.[a-zA-Z]{2,})$/i;
   return emailRegex.test(email);
 };
 
@@ -222,14 +222,15 @@ export default function Search() {
       }
     } else if (inputMode === 'numeric') {
       // Para modo numérico, permite apenas dígitos e teclas de controle/formatação básica
-      // A máscara em onChange fará a formatação final.
-      if (!/^[\d]$/.test(e.key) && e.key.length === 1) { // e.key.length === 1 para ignorar Enter, Shift, etc.
-          // e.preventDefault(); // Descomente se quiser ser mais restritivo aqui
+      if (!/^[\d]$/.test(e.key) && e.key.length === 1) { 
+          // e.preventDefault(); // Pode ser mais restritivo aqui se necessário
       }
     } else if (inputMode === 'letters') {
-      // Para modo letras, permite letras, espaços e teclas de controle.
-      if (!/^[a-zA-ZÀ-ÿ\s]$/.test(e.key) && e.key.length === 1) {
-          // e.preventDefault(); // Descomente se quiser ser mais restritivo aqui
+      // Para modo letras, permite letras, espaços, números e . _ -
+      // Teclas de controle já são permitidas pela lógica anterior.
+      if (!/^[a-zA-ZÀ-ÿ0-9\s@._-]$/.test(e.key) && e.key.length === 1) { // ADICIONADO @ à regex
+          e.preventDefault(); 
+          return;
       }
     }
     
@@ -240,9 +241,7 @@ export default function Search() {
   };
 
   const handleSearchChange = (e) => {
-    if (isLoading) {
-      return;
-    }
+    if (isLoading) return;
 
     const currentValue = e.target.value;
 
@@ -260,16 +259,14 @@ export default function Search() {
     let nextQuery = currentValue;
     let nextInputMode = inputMode;
     let nextInputType = inputType;
-    let nextIsValid = isValid; // Manter o estado de validade anterior por padrão
+    let nextIsValid = isValid;
     let hideSuggestions = false;
 
-
-    // Prioridade 1: Detecção do modo Email
+    // --- EMAIL ---
     if (inputMode === 'email' || currentValue.includes('@')) {
       nextInputMode = 'email';
       nextInputType = 'email';
-      
-      // Filtra caracteres permitidos para email e converte para minúsculas
+
       let filteredEmail = '';
       for (const char of currentValue) {
         if (/[a-zA-Z0-9@._-]/.test(char)) {
@@ -277,90 +274,87 @@ export default function Search() {
         }
       }
       nextQuery = filteredEmail.toLowerCase();
-      nextIsValid = isValidEmail(nextQuery);
+
+      // Validação amigável: só mostra erro se claramente inválido
+      const parts = nextQuery.split('@');
+      if (
+        parts.length === 2 &&
+        parts[0].length > 0 &&
+        (parts[1].length === 0 || !parts[1].includes('.'))
+      ) {
+        // Usuário ainda digitando domínio, não mostra erro
+        nextIsValid = null;
+      } else if (isValidEmail(nextQuery)) {
+        nextIsValid = true;
+      } else if (nextQuery.length > 0) {
+        nextIsValid = false;
+      } else {
+        nextIsValid = null;
+      }
       hideSuggestions = true;
 
+    // --- NUMÉRICO ---
     } else {
-      // Se não for e-mail, tenta determinar se é numérico ou letras
-      const firstChar = currentValue.trimLeft().charAt(0);
+      const trimmedLeftValue = currentValue.trimLeft();
+      const firstChar = trimmedLeftValue.charAt(0);
 
-      // Prioridade 2: Modo Numérico (se não for email)
-      if (inputMode === 'numeric' || (inputMode === null && /^\d$/.test(firstChar))) {
+      if (
+        (inputMode === 'numeric' && !/[a-zA-ZÀ-ÿ@._-]/.test(currentValue)) ||
+        (inputMode === null && /^\d$/.test(firstChar) && trimmedLeftValue !== "" && !/[a-zA-ZÀ-ÿ@._-]/.test(currentValue))
+      ) {
         nextInputMode = 'numeric';
-        // A função applyMask já lida com setInputType e setIsValid internamente
-        // e retorna o valor mascarado.
-        const maskedValue = applyMask(currentValue); // applyMask deve atualizar inputType e isValid
+        const maskedValue = applyMask(currentValue);
         nextQuery = maskedValue;
-        // inputType e isValid são definidos dentro de applyMask
-        // Para garantir que sejam atualizados no estado do componente,
-        // precisamos capturá-los se applyMask não os definir diretamente via setState.
-        // No entanto, a estrutura atual de applyMask já chama setInputType e setIsValid.
         hideSuggestions = true;
 
-      } 
-      // Prioridade 3: Modo Letras (se não for email nem numérico)
-      else if (inputMode === 'letters' || (inputMode === null && /^[a-zA-ZÀ-ÿ]$/.test(firstChar))) {
+      // --- LETRAS ---
+      } else {
         nextInputMode = 'letters';
-        nextInputType = 'letters'; // Especificamente para nomes/letras
-        
-        // Permite apenas letras (incluindo acentuadas) e espaços
+        nextInputType = 'text';
+
         let filteredText = '';
         for (const char of currentValue) {
-          if (/[a-zA-ZÀ-ÿ\s]/.test(char)) {
+          if (/[a-zA-ZÀ-ÿ0-9\s._-]/.test(char)) {
             filteredText += char;
           }
         }
         nextQuery = formatSearchText(filteredText);
-        nextIsValid = null; // Nenhuma validação true/false para nomes aqui
+        nextIsValid = null;
 
-        // Lógica para buscar sugestões de sobrenome
         const trimmedQueryForSuggestions = nextQuery.trim();
-        if (trimmedQueryForSuggestions.includes(' ') && trimmedQueryForSuggestions.length > 2 && !firstName) {
-          // Se há espaço e ainda não definimos o firstName (ou seja, é o primeiro espaço)
+        if (
+          trimmedQueryForSuggestions.includes(' ') &&
+          trimmedQueryForSuggestions.length > 2 &&
+          !firstName &&
+          !/[@0-9._-]/.test(trimmedQueryForSuggestions.split(' ')[0])
+        ) {
           const parts = trimmedQueryForSuggestions.split(' ');
           if (parts.length > 1 && parts[0].length > 0) {
-            setFirstName(parts[0]); // Define o primeiro nome
-            fetchSurnameSuggestions(parts[0]); // Busca sugestões baseadas no primeiro nome
+            setFirstName(parts[0]);
+            fetchSurnameSuggestions(parts[0]);
             setShowSuggestions(true);
           }
-        } else if (!trimmedQueryForSuggestions.includes(' ')) {
-          // Se não há espaços, limpa o firstName e esconde sugestões
+        } else if (
+          !trimmedQueryForSuggestions.includes(' ') ||
+          /[@0-9._-]/.test(trimmedQueryForSuggestions)
+        ) {
           setFirstName('');
           hideSuggestions = true;
         }
-        // Se já tem firstName e continua digitando, as sugestões já devem estar visíveis ou sendo carregadas.
-
-      } else {
-        // Caso padrão ou entrada mista não reconhecida inicialmente (ex: começa com símbolo não permitido)
-        // Mantém o valor como está, sem formatação específica ou modo definido,
-        // ou limpa se for inválido.
-        // Por simplicidade, vamos apenas manter o valor e não definir um modo específico.
-        nextQuery = currentValue; // Ou poderia filtrar para remover caracteres totalmente inválidos
-        nextInputMode = null; // Reseta o modo se a entrada não se encaixa
-        nextInputType = 'text';
-        nextIsValid = null;
-        hideSuggestions = true;
       }
     }
 
     setQuery(nextQuery);
-    if (inputMode !== nextInputMode) {
-      setInputMode(nextInputMode);
-    }
-    // Atualiza inputType e isValid SE eles foram alterados pela lógica acima
-    // E não é numérico (pois applyMask já cuida disso)
+    if (inputMode !== nextInputMode) setInputMode(nextInputMode);
+
     if (nextInputMode !== 'numeric') {
-        if (inputType !== nextInputType) {
-            setInputType(nextInputType);
-        }
-        if (isValid !== nextIsValid) {
-            setIsValid(nextIsValid);
-        }
+      if (inputType !== nextInputType) setInputType(nextInputType);
+      if (isValid !== nextIsValid) setIsValid(nextIsValid);
     }
-    
+
     if (hideSuggestions) {
-        setSuggestions([]);
-        setShowSuggestions(false);
+      setSuggestions([]);
+      setShowSuggestions(false);
     }
   };
 
@@ -399,15 +393,43 @@ export default function Search() {
 
   // Função original para formatar texto (primeira letra maiúscula)
   const formatSearchText = (text) => {
-    return text
-      .split(' ')
-      .map(word => {
-        if (word.length > 2) {
+    // Se o texto contém @, ou se contém números, ., _, - E NÃO contém espaço,
+    // considera como um potencial email/identificador e retorna em minúsculas.
+    if (text.includes('@') || (/[0-9._-]/.test(text) && !text.includes(' '))) {
+      return text.toLowerCase();
+    }
+
+    const words = text.split(' ');
+    const hasSpaceInOriginalText = text.includes(' ');
+    // Regex para identificar palavras que NÃO devem ser formatadas como nomes
+    // (ex: contêm @, ., números, _, -).
+    // Esta regex é para palavras individuais.
+    const nonNameCharsInWordRegex = /[@0-9._-]/;
+
+    return words.map((word, index) => {
+      if (word.length === 0) return '';
+
+      // Se a palavra individual contém caracteres que indicam que não é um nome, mantém minúscula.
+      if (nonNameCharsInWordRegex.test(word)) {
+        return word.toLowerCase();
+      }
+
+      // Lógica de capitalização para nomes:
+      if (index === 0) { // Primeira palavra
+        // Só capitaliza se HÁ espaço no texto original E palavra > 2
+        if (hasSpaceInOriginalText && word.length > 2) {
           return word.charAt(0).toUpperCase() + word.slice(1).toLowerCase();
         }
-        return word.toLowerCase();
-      })
-      .join(' ');
+        return word.toLowerCase(); // Senão, minúscula
+      }
+
+      // Palavras subsequentes (após um espaço)
+      // Capitaliza se tiver mais de 2 caracteres
+      if (word.length > 2) {
+        return word.charAt(0).toUpperCase() + word.slice(1).toLowerCase();
+      }
+      return word.toLowerCase();
+    }).join(' ');
   };
 
   // Função para detectar tipo e aplicar máscara apropriada
