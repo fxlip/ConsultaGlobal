@@ -42,6 +42,7 @@ const isValidCNPJ = (cnpj) => {
   
   // Remove caracteres não numéricos
   cnpj = cnpj.replace(/\D/g, '');
+  
   // Se for maior que 14, considere apenas os primeiros 14 dígitos para validação
   const cnpjParaValidar = cnpj.length > 14 ? cnpj.substring(0, 14) : cnpj;
   
@@ -82,6 +83,7 @@ const isValidCelular = (celular) => {
   
   // Remove caracteres não numéricos
   celular = celular.replace(/\D/g, '');
+  
   // Se for maior que 12, considere apenas os primeiros 12 dígitos para validação
   const celularParaValidar = celular.length > 12 ? celular.substring(0, 12) : celular;
   
@@ -93,9 +95,7 @@ const isValidCelular = (celular) => {
 // NOVA FUNÇÃO: Função para validar Email
 const isValidEmail = (email) => {
   if (!email) return false;
-  // Regex para validar estrutura de email, permitindo os caracteres especificados: a-z, A-Z, 0-9, @, ., _, -
-  // A parte local e o domínio podem conter . e -
-  // O TLD deve ter pelo menos 2 letras.
+  // Regex simples para validação de email
   const emailRegex = /^[a-z0-9._-]+@[a-z0-9.-]+\.[a-z]{2,}$/i;
   return emailRegex.test(email);
 };
@@ -135,47 +135,76 @@ const maskCelular = (value) => {
     return `(${numbers.slice(0,3)}) ${numbers.slice(3)}`;
   } else if (numbers.length <= 8) {
     // (012) 9 1234
-    return `(${numbers.slice(0,3)}) ${numbers.slice(3,4)} ${numbers.slice(4,8)}`;
+    return `(${numbers.slice(0,3)}) ${numbers.slice(3,4)} ${numbers.slice(4)}`;
   } else {
-    // (012) 9 1234-5678 (limita a 12 dígitos numéricos para celular)
+    // (012) 9 1234-5678
     return `(${numbers.slice(0,3)}) ${numbers.slice(3,4)} ${numbers.slice(4,8)}-${numbers.slice(8,12)}`;
   }
 };
 
-
 export default function Search() {
   const [query, setQuery] = useState('');
+  const [inputType, setInputType] = useState('text'); 
+  const [isValid, setIsValid] = useState(null); 
+  const [inputMode, setInputMode] = useState(null); 
+  const debouncedQuery = useDebounce(query, 100);
   const [results, setResults] = useState([]);
-  const [isLoading, setIsLoading] = useState(false);
-  const [inputType, setInputType] = useState('text'); // text, cpf, cnpj, celular, email, letters
-  const [isValid, setIsValid] = useState(null); // true, false, ou null (sem validação/cor)
-  const [suggestions, setSuggestions] = useState([]);
-  const [showSuggestions, setShowSuggestions] = useState(false);
-  const [inputMode, setInputMode] = useState(null); // 'numeric', 'letters', 'email', ou null
-  const [preventBlur, setPreventBlur] = useState(false);
-  const [isLoadingSuggestions, setIsLoadingSuggestions] = useState(false);
-
-
+  const [suggestions, setSuggestions] = useState([]); // Para sugestões de sobrenomes
+  const [showSuggestions, setShowSuggestions] = useState(false); // Controla a exibição das sugestões
+  const [firstName, setFirstName] = useState(''); // Armazena o primeiro nome para buscar sobrenomes
   const inputRef = useRef(null);
+  const [isLoading, setIsLoading] = useState(false); // Estado para controlar se está carregando
+  const [isFocused, setIsFocused] = useState(false);
+  const [preventBlur, setPreventBlur] = useState(false); // Novo estado para prevenir blur durante loading
 
-  // Debounce para busca de sobrenomes
-  const debouncedFetchSurnameSuggestions = useDebounce(fetchSurnameSuggestions, 300);
+  // Função para lidar com o foco do input
+  const handleFocus = () => {
+    setIsFocused(true);
+  };
 
-  useEffect(() => {
-    if (query.trim() === '') {
-      setResults([]);
-      setSuggestions([]);
-      setShowSuggestions(false);
-    }
-  }, [query]);
-
-  const handleKeyDown = (e) => {
-    if (isLoading) {
+  // Função para lidar com a perda de foco do input
+  // Modifique a função handleBlur para respeitar o estado preventBlur
+  const handleBlur = (e) => {
+    if (preventBlur) {
+      // Se estiver em loading, previne o blur focando o input novamente
       e.preventDefault();
+      if (inputRef.current) {
+        setTimeout(() => inputRef.current.focus(), 10);
+      }
       return;
     }
 
-    // Permite Backspace, Delete, setas, Tab, Ctrl/Cmd + A, C, V, X
+    // Comportamento normal (com delay para permitir cliques nas sugestões)
+    setTimeout(() => {
+      // Não esconder sugestões se o input ainda estiver focado (pode acontecer com preventBlur)
+      if (document.activeElement !== inputRef.current) {
+        setShowSuggestions(false);
+      }
+      setIsFocused(false);
+    }, 200);
+  };
+
+  // Na função handleKeyDown, bloqueie qualquer tecla que edite o texto
+  const handleKeyDown = (e) => {
+    if (isLoading) {
+      // Bloqueia todas as teclas que podem editar o texto
+      // Permite Tab para navegação
+      if (
+        e.key !== 'Tab' && (
+        e.key === 'Backspace' ||
+        e.key === 'Delete' ||
+        e.key === 'ArrowLeft' ||
+        e.key === 'ArrowRight' ||
+        e.ctrlKey ||  // Combinações com Ctrl
+        e.metaKey     // Combinações com Command (Mac)
+        )
+      ) {
+        e.preventDefault();
+        return; // Não retorna false, apenas previne e retorna
+      }
+    }
+
+    // Permite Backspace, Delete, setas, Tab, Ctrl/Cmd + A, C, V, X mesmo em outros modos
     if (
       e.key === 'Backspace' ||
       e.key === 'Delete' ||
@@ -184,23 +213,29 @@ export default function Search() {
       e.key === 'Tab' ||
       ((e.ctrlKey || e.metaKey) && ['a', 'c', 'v', 'x'].includes(e.key.toLowerCase()))
     ) {
-      return; // Não previne o default para estas teclas de edição/navegação
-    }
-
-    // Se o modo for 'email', permite apenas os caracteres válidos para email.
-    // Isso oferece um feedback mais imediato ao usuário, complementando a filtragem em onChange.
-    if (inputMode === 'email') {
-      if (!/^[a-zA-Z0-9@._-]$/.test(e.key) && e.key.length === 1) { // e.key.length === 1 para ignorar Enter, Shift, etc.
-        e.preventDefault(); // Previne a inserção do caractere inválido
+      // Não previne o default para estas teclas de edição/navegação
+    } else if (inputMode === 'email') {
+      // Se o modo for 'email', permite apenas os caracteres válidos para email.
+      if (!/^[a-zA-Z0-9@._-]$/.test(e.key) && e.key.length === 1) {
+        e.preventDefault();
         return;
       }
+    } else if (inputMode === 'numeric') {
+      // Para modo numérico, permite apenas dígitos e teclas de controle/formatação básica
+      // A máscara em onChange fará a formatação final.
+      if (!/^[\d]$/.test(e.key) && e.key.length === 1) { // e.key.length === 1 para ignorar Enter, Shift, etc.
+          // e.preventDefault(); // Descomente se quiser ser mais restritivo aqui
+      }
+    } else if (inputMode === 'letters') {
+      // Para modo letras, permite letras, espaços e teclas de controle.
+      if (!/^[a-zA-ZÀ-ÿ\s]$/.test(e.key) && e.key.length === 1) {
+          // e.preventDefault(); // Descomente se quiser ser mais restritivo aqui
+      }
     }
-    // Para outros modos, a filtragem principal e mais robusta ocorre em handleSearchChange.
-    // Não é estritamente necessário bloquear aqui, pois handleSearchChange corrigirá.
-
+    
     // Se a tecla for Enter, trata a submissão da pesquisa
     if (e.key === 'Enter' && query.trim()) {
-      handleSearchSubmit(e);
+      handleSearchSubmit(e); // Passar o evento 'e'
     }
   };
 
@@ -218,137 +253,151 @@ export default function Search() {
       setIsValid(null);
       setSuggestions([]);
       setShowSuggestions(false);
+      setFirstName('');
       return;
     }
 
     let nextQuery = currentValue;
     let nextInputMode = inputMode;
     let nextInputType = inputType;
-    let nextIsValid = null; 
-    let forceHideSuggestions = false;
+    let nextIsValid = isValid; // Manter o estado de validade anterior por padrão
+    let hideSuggestions = false;
 
-    // Prioridade 1: Modo Email
-    // Se já está no modo email ou se o valor contém '@'
+
+    // Prioridade 1: Detecção do modo Email
     if (inputMode === 'email' || currentValue.includes('@')) {
-      if (inputMode !== 'email') { // Transição para o modo email
-        nextInputMode = 'email';
-      } else {
-        nextInputMode = 'email'; // Mantém modo email
-      }
+      nextInputMode = 'email';
       nextInputType = 'email';
       
+      // Filtra caracteres permitidos para email e converte para minúsculas
       let filteredEmail = '';
       for (const char of currentValue) {
-        // Permitir apenas os caracteres especificados: a-z, A-Z, 0-9, @, ., _, -
         if (/[a-zA-Z0-9@._-]/.test(char)) {
           filteredEmail += char;
         }
       }
-      nextQuery = filteredEmail.toLowerCase(); // E-mails são geralmente case-insensitive e armazenados em minúsculas
+      nextQuery = filteredEmail.toLowerCase();
       nextIsValid = isValidEmail(nextQuery);
-      forceHideSuggestions = true;
+      hideSuggestions = true;
 
     } else {
-      // Prioridade 2: Modo Numérico ou Letras (se não for email)
-      const trimmedValue = currentValue.trimLeft(); // Considera o valor sem espaços à esquerda para determinar o tipo
-      const firstSignificantChar = trimmedValue.charAt(0);
+      // Se não for e-mail, tenta determinar se é numérico ou letras
+      const firstChar = currentValue.trimLeft().charAt(0);
 
-      if (/^\d$/.test(firstSignificantChar) || (inputMode === 'numeric' && trimmedValue !== "")) {
-        // Se o primeiro caractere significativo for um número, ou se já estava no modo numérico
+      // Prioridade 2: Modo Numérico (se não for email)
+      if (inputMode === 'numeric' || (inputMode === null && /^\d$/.test(firstChar))) {
         nextInputMode = 'numeric';
-        // applyMask é responsável por limpar não numéricos, aplicar a máscara (CPF, CNPJ, Celular),
-        // e também por chamar setInputType e setIsValid internamente.
-        nextQuery = applyMask(currentValue); 
-        // Como applyMask atualiza inputType e isValid, não precisamos definir nextInputType e nextIsValid aqui.
-        forceHideSuggestions = true;
+        // A função applyMask já lida com setInputType e setIsValid internamente
+        // e retorna o valor mascarado.
+        const maskedValue = applyMask(currentValue); // applyMask deve atualizar inputType e isValid
+        nextQuery = maskedValue;
+        // inputType e isValid são definidos dentro de applyMask
+        // Para garantir que sejam atualizados no estado do componente,
+        // precisamos capturá-los se applyMask não os definir diretamente via setState.
+        // No entanto, a estrutura atual de applyMask já chama setInputType e setIsValid.
+        hideSuggestions = true;
 
-      } else if (/^[a-zA-ZÀ-ÿ]$/.test(firstSignificantChar) || (inputMode === 'letters' && trimmedValue !== "")) {
-        // Se o primeiro caractere significativo for uma letra, ou se já estava no modo letras
+      } 
+      // Prioridade 3: Modo Letras (se não for email nem numérico)
+      else if (inputMode === 'letters' || (inputMode === null && /^[a-zA-ZÀ-ÿ]$/.test(firstChar))) {
         nextInputMode = 'letters';
-        nextInputType = 'letters'; 
+        nextInputType = 'letters'; // Especificamente para nomes/letras
         
+        // Permite apenas letras (incluindo acentuadas) e espaços
         let filteredText = '';
         for (const char of currentValue) {
-          if (/[a-zA-ZÀ-ÿ\s]/.test(char)) { // Permite apenas letras (incluindo acentuadas) e espaços
+          if (/[a-zA-ZÀ-ÿ\s]/.test(char)) {
             filteredText += char;
           }
         }
-        // formatSearchText capitaliza a primeira letra de palavras com mais de 2 caracteres
         nextQuery = formatSearchText(filteredText);
-        nextIsValid = null; // Nenhuma validação específica para 'nome' (isValid true/false) neste ponto
+        nextIsValid = null; // Nenhuma validação true/false para nomes aqui
 
         // Lógica para buscar sugestões de sobrenome
         const trimmedQueryForSuggestions = nextQuery.trim();
-        if (trimmedQueryForSuggestions.includes(' ') && trimmedQueryForSuggestions.length > 2 && !isLoadingSuggestions) {
-          debouncedFetchSurnameSuggestions(trimmedQueryForSuggestions);
-          // setShowSuggestions(true) será chamado dentro de fetchSurnameSuggestions ou seu callback
-        } else {
-          forceHideSuggestions = true; 
+        if (trimmedQueryForSuggestions.includes(' ') && trimmedQueryForSuggestions.length > 2 && !firstName) {
+          // Se há espaço e ainda não definimos o firstName (ou seja, é o primeiro espaço)
+          const parts = trimmedQueryForSuggestions.split(' ');
+          if (parts.length > 1 && parts[0].length > 0) {
+            setFirstName(parts[0]); // Define o primeiro nome
+            fetchSurnameSuggestions(parts[0]); // Busca sugestões baseadas no primeiro nome
+            setShowSuggestions(true);
+          }
+        } else if (!trimmedQueryForSuggestions.includes(' ')) {
+          // Se não há espaços, limpa o firstName e esconde sugestões
+          setFirstName('');
+          hideSuggestions = true;
         }
+        // Se já tem firstName e continua digitando, as sugestões já devem estar visíveis ou sendo carregadas.
+
       } else {
-        // Se não for email, nem começar com número ou letra (ex: caractere especial isolado, ou campo misto não previsto)
-        // Tratar como texto genérico, sem formatação ou validação específica.
-        nextInputMode = null; // Indica um modo genérico/texto simples
+        // Caso padrão ou entrada mista não reconhecida inicialmente (ex: começa com símbolo não permitido)
+        // Mantém o valor como está, sem formatação específica ou modo definido,
+        // ou limpa se for inválido.
+        // Por simplicidade, vamos apenas manter o valor e não definir um modo específico.
+        nextQuery = currentValue; // Ou poderia filtrar para remover caracteres totalmente inválidos
+        nextInputMode = null; // Reseta o modo se a entrada não se encaixa
         nextInputType = 'text';
-        nextQuery = currentValue; // Mantém o valor como está, sem filtros adicionais aqui
         nextIsValid = null;
-        forceHideSuggestions = true;
+        hideSuggestions = true;
       }
     }
 
     setQuery(nextQuery);
-
     if (inputMode !== nextInputMode) {
       setInputMode(nextInputMode);
     }
-
-    // Atualiza inputType e isValid, exceto se o modo for numérico (onde applyMask já o fez)
+    // Atualiza inputType e isValid SE eles foram alterados pela lógica acima
+    // E não é numérico (pois applyMask já cuida disso)
     if (nextInputMode !== 'numeric') {
-      if (inputType !== nextInputType) {
-        setInputType(nextInputType);
-      }
-      if (isValid !== nextIsValid) {
-        setIsValid(nextIsValid);
-      }
+        if (inputType !== nextInputType) {
+            setInputType(nextInputType);
+        }
+        if (isValid !== nextIsValid) {
+            setIsValid(nextIsValid);
+        }
     }
     
-    if (forceHideSuggestions) {
+    if (hideSuggestions) {
         setSuggestions([]);
         setShowSuggestions(false);
     }
   };
 
   const handleSearchSubmit = async (e) => {
-    e.preventDefault();
+    // Adicionado para verificar se 'e' existe, pois pode ser chamado sem evento
+    if (e && e.preventDefault) {
+      e.preventDefault();
+    }
+
     if (!query.trim() || isLoading) {
       return;
     }
-
+    
     setIsLoading(true);
-    setResults([]); // Limpa resultados anteriores
-    setSuggestions([]); // Esconde sugestões
+    setResults([]); 
+    setSuggestions([]); 
     setShowSuggestions(false);
-
-    // Simulação de chamada de API
+      
     try {
+      console.log('Buscando por:', query, 'Tipo:', inputType, 'Modo:', inputMode, 'Válido:', isValid);
+      // Simulação de chamada de API
       // Substitua pelo seu endpoint de busca real
       // const response = await fetch(`/api/search?q=${encodeURIComponent(query)}&type=${inputType}`);
       // const data = await response.json();
       // setResults(data);
-      console.log('Buscando por:', query, 'Tipo:', inputType, 'Modo:', inputMode, 'Válido:', isValid);
-      // Simulação
-      setTimeout(() => {
-        setResults([{ id: 1, name: `Resultado para "${query}"` }]);
-        setIsLoading(false);
-      }, 1000);
+      await new Promise(resolve => setTimeout(resolve, 1000)); // Simula delay
+      setResults([{ id: 1, name: `Resultado para "${query}" (Tipo: ${inputType})` }]);
+
     } catch (error) {
       console.error('Erro durante a busca:', error);
       setResults([]);
+    } finally {
       setIsLoading(false);
     }
   };
 
-  // Função original para formatar texto (primeira letra maiúscula de palavras > 2 chars)
+  // Função original para formatar texto (primeira letra maiúscula)
   const formatSearchText = (text) => {
     return text
       .split(' ')
@@ -356,174 +405,215 @@ export default function Search() {
         if (word.length > 2) {
           return word.charAt(0).toUpperCase() + word.slice(1).toLowerCase();
         }
-        // Palavras com 2 ou menos caracteres ficam em minúsculas (ou como estão, se preferir)
-        // Para manter consistência com a capitalização, pode-se optar por word.toLowerCase()
-        // ou simplesmente `return word;` se não quiser alterá-las.
-        // O original era word.toLowerCase().
-        return word.toLowerCase(); 
+        return word.toLowerCase();
       })
       .join(' ');
   };
 
-  // Função para detectar tipo e aplicar máscara apropriada (CPF, CNPJ, Celular)
-  // Esta função também chama setInputType e setIsValid como efeitos colaterais.
+  // Função para detectar tipo e aplicar máscara apropriada
   const applyMask = (value) => {
-    const cleanValue = value.replace(/\D/g, ''); // Remove formatação existente, pega só números
-    const limitedValue = cleanValue.slice(0, 14); // Limita a 14 dígitos (máximo para CNPJ)
+    // Remove formatação existente
+    const cleanValue = value.replace(/\D/g, '');
+    
+    // Limita a entrada a 14 dígitos (máximo para CNPJ)
+    const limitedValue = cleanValue.slice(0, 14);
   
+    // Se tiver menos de 4 dígitos, não aplica máscara ainda
     if (limitedValue.length < 4) {
-      setInputType('text'); // Poucos dígitos, ainda não é possível determinar o tipo específico
-      setIsValid(null); 
-      return limitedValue; // Retorna os números limpos, sem máscara
+      setInputType('text');
+      setIsValid(null); // não mostra cor
+      return limitedValue;
     }
   
-    // Verifica se é um celular pelo padrão 0XX9... (começa com 0, 4º dígito é 9)
-    // Considerando que o DDD tem 3 dígitos (ex: 011), o 4º dígito do número completo (0+DDD+Numero) seria o primeiro do número em si.
-    // A validação original era `limitedValue.charAt(0) === '0' && limitedValue.charAt(3) === '9'`
-    // Isso implica que o DDD tem 3 dígitos (ex: 0XX). Se o DDD tiver 2 (XX), seria charAt(2) === '9'.
-    // Vamos manter a lógica original, assumindo DDD de 3 dígitos para celular iniciado com 0.
-    if (limitedValue.startsWith('0') && limitedValue.length >= 4 && limitedValue.charAt(3) === '9') {
+    // Verifica se é um celular pelo padrão 0XX9... (começa com 0 e 4º dígito é 9)
+    if (limitedValue.charAt(0) === '0' && limitedValue.length >= 4 && limitedValue.charAt(3) === '9') {
       setInputType('celular');
       const isCelularValid = isValidCelular(limitedValue);
-      // Valida se tem pelo menos 12 dígitos para ser considerado "completo" para validação.
-      setIsValid(limitedValue.length >= 12 ? isCelularValid : null); 
+      setIsValid(limitedValue.length >= 12 ? isCelularValid : null);
       return maskCelular(limitedValue);
     } 
   
-    // Se não for celular, verifica se é CPF ou CNPJ
+    // O mesmo ajuste pode ser feito para CPF e CNPJ para consistência
     if (limitedValue.length <= 11) {
+      // Formata como CPF
       setInputType('cpf');
       const isCPFValid = isValidCPF(limitedValue);
-      setIsValid(limitedValue.length === 11 ? isCPFValid : null); // CPF é válido apenas com 11 dígitos
+      setIsValid(limitedValue.length === 11 ? isCPFValid : null);
       return maskCPF(limitedValue);
-    } else { // 12 ou mais dígitos, e não é celular -> trata como CNPJ
+    } else {
+      // Formata como CNPJ se passar de 11 dígitos (12 ou mais)
       setInputType('cnpj');
       const isCNPJValid = isValidCNPJ(limitedValue);
-      setIsValid(limitedValue.length >= 14 ? isCNPJValid : null); // CNPJ é válido com 14 dígitos
+      setIsValid(limitedValue.length >= 14 ? isCNPJValid : null);
       return maskCNPJ(limitedValue);
     }
   };
 
   // Função para aplicar a sugestão de sobrenome
   const applySuggestion = (suggestion) => {
-    // Ao aplicar a sugestão, o modo deve ser 'letters'
-    setInputMode('letters');
-    setInputType('letters');
-    setQuery(suggestion.fullName); // fullName já deve estar formatado por formatSearchText se necessário
-    setIsValid(null); // Validação de nome não é feita aqui
+    setQuery(suggestion.fullName);
     setSuggestions([]);
     setShowSuggestions(false);
-    setPreventBlur(false); // Permite o blur após aplicar
     if (inputRef.current) {
       inputRef.current.focus();
     }
   };
 
-  async function fetchSurnameSuggestions(namePart) {
-    if (!namePart.includes(' ') || namePart.length < 3) {
-      setSuggestions([]);
-      setShowSuggestions(false);
-      return;
-    }
-    setIsLoadingSuggestions(true);
-    setPreventBlur(true); // Previne o blur enquanto carrega sugestões
-
-    // Simulação de API para sugestões de sobrenome
-    console.log('Buscando sugestões para:', namePart);
-    try {
-      await new Promise(resolve => setTimeout(resolve, 500)); // Simula delay da API
-      const mockSuggestions = [
-        { id: '1', fullName: `${namePart} Silva` },
-        { id: '2', fullName: `${namePart} Santos` },
-        { id: '3', fullName: `${namePart} Oliveira` },
-      ].filter(sugg => sugg.fullName.toLowerCase().startsWith(namePart.toLowerCase()));
-
-      if (mockSuggestions.length > 0) {
-        setSuggestions(mockSuggestions);
-        setShowSuggestions(true);
-      } else {
+  // Modifique a função fetchSurnameSuggestions para controlar o estado preventBlur
+  const fetchSurnameSuggestions = async (name) => {
+    if (!name || name.trim() === '') { // Adicionada verificação para nome vazio
         setSuggestions([]);
         setShowSuggestions(false);
+        return;
+    }
+    try {
+      setIsLoading(true);
+      setPreventBlur(true); // Previne o blur enquanto carrega
+      
+      // Armazene o nome atual para usar nas sugestões
+      const currentSearchName = name;
+  
+      const response = await fetch(`/api/surname-suggestions?firstName=${encodeURIComponent(name)}`);
+      if (!response.ok) {
+        throw new Error('Falha ao buscar sugestões');
+      }
+      
+      const data = await response.json();
+      
+      // Use currentSearchName em vez de firstName
+      const enhancedData = data.map(surname => ({
+        fullName: `${currentSearchName} ${surname}`, // <-- CORREÇÃO AQUI
+        surname,
+        description: `${['Brasiliense', 'Paulista', 'Carioca', 'Mineiro'][Math.floor(Math.random() * 4)]} de ${20 + Math.floor(Math.random() * 40)} anos`,
+        avatarUrl: 'https://placehold.co/100'
+      }));
+      
+      setSuggestions(enhancedData);
+      setShowSuggestions(enhancedData.length > 0);
+      
+      // Atualizar o firstName para uso futuro
+      setFirstName(currentSearchName);
+      
+      // Garante que o input mantenha o foco após o loading
+      if (inputRef.current) {
+        inputRef.current.focus();
       }
     } catch (error) {
-      console.error("Erro ao buscar sugestões de sobrenome:", error);
+      console.error('Erro ao buscar sugestões de sobrenomes:', error);
       setSuggestions([]);
       setShowSuggestions(false);
     } finally {
-      setIsLoadingSuggestions(false);
-      // Não setar preventBlur para false aqui, pois o usuário pode estar clicando
-      // Deixar o onBlur do input lidar com isso se não for um clique na sugestão.
-      // Ou o applySuggestion lida com isso.
-    }
-  }
-  
-  const handleInputBlur = () => {
-    // Atraso para permitir cliques nas sugestões antes de esconder
-    if (!preventBlur) {
-        setTimeout(() => {
-            setShowSuggestions(false);
-        }, 100); // Ajuste o tempo conforme necessário
+      setIsLoading(false);
+      // Pequeno delay antes de permitir blur novamente para garantir que as sugestões apareçam
+      setTimeout(() => {
+        setPreventBlur(false);
+        // Refocus explícito para garantir que o input ainda tem foco
+        if (inputRef.current) {
+          inputRef.current.focus();
+        }
+      }, 100);
     }
   };
 
+  // Determina a classe CSS com base na validade
+  const getInputClass = () => {
+    // Adicionado 'email' à lista de inputTypes que podem ter validação visual
+    if (isValid === null || (inputType !== 'cpf' && inputType !== 'cnpj' && inputType !== 'celular' && inputType !== 'email')) return '';
+    return isValid ? 'valid-format' : 'invalid-format';
+  };
+
+  useEffect(() => {
+    if (debouncedQuery.trim() !== "") {
+      // Busca na API
+      fetch(`/api/search?term=${debouncedQuery}`)
+        .then(res => res.json())
+        .then(data => setResults(data))
+        .catch(err => {
+          console.error(err);
+          setResults([]);
+        });
+    } else {
+      setResults([]);
+    }
+  }, [debouncedQuery]);
 
   return (
-    <div className="search-container">
-      <form onSubmit={handleSearchSubmit} className="search-form">
-        <div className={`search-input-wrapper ${isLoading ? 'loading' : ''} ${isValid === true ? 'valid' : isValid === false ? 'invalid' : ''}`}>
-          <SearchIcon className="search-input-icon" />
-          <input
-            ref={inputRef}
-            type="text" // Sempre text, o comportamento é controlado via JS
-            value={query}
-            onChange={handleSearchChange}
-            onKeyDown={handleKeyDown}
-            onBlur={handleInputBlur}
-            onFocus={() => {
-                // Se houver sugestões e o campo tiver foco, mostre-as
-                // (exceto se estiver no modo email ou numérico)
-                if (inputMode === 'letters' && suggestions.length > 0 && query.includes(' ')) {
-                    setShowSuggestions(true);
-                }
-                setPreventBlur(false); // Reseta o preventBlur ao focar
-            }}
-            placeholder="Nome, CPF, CNPJ, Celular ou Email"
-            className="search-input"
-            disabled={isLoading}
-          />
-          {isLoading && <div className="spinner"></div>}
+    <div className="search-wrapper">
+      {/* Altere a condição aqui para só ativar quando realmente houver sugestões */}
+      <div className={`search-container ${showSuggestions && suggestions.length > 0 && isFocused ? 'with-suggestions' : ''}`}>
+        <div className="search-icon">
+          <SearchIcon />
         </div>
-        <button type="submit" className="search-button" disabled={isLoading || !query.trim()}>
-          Buscar
-        </button>
-      </form>
-
-      {showSuggestions && suggestions.length > 0 && (
-        <ul 
-            className="suggestions-list"
-            onMouseDown={() => setPreventBlur(true)} // Previne o blur ao clicar na lista
-            onMouseUp={() => setPreventBlur(false)} // Libera o preventBlur após o clique
-        >
-          {suggestions.map((suggestion) => (
-            <li
-              key={suggestion.id}
-              onClick={() => applySuggestion(suggestion)}
-              className="suggestion-item"
+        <input
+          ref={inputRef}
+          type="text"
+          className={`search-input ${getInputClass()} ${isLoading ? 'loading' : ''}`}
+          value={query}
+          onChange={handleSearchChange}
+          onKeyDown={handleKeyDown}
+          onFocus={handleFocus}
+          onBlur={handleBlur}
+          placeholder="Quem você quer encontrar?"
+          disabled={isLoading} 
+        />
+        {query && (
+          isLoading ? (
+            <div className="loader" role="status" aria-label="Carregando">
+              <svg className="circular" viewBox="25 25 50 50">
+                <circle className="path" cx="50" cy="50" r="20" fill="none" strokeWidth="2" strokeMiterlimit="10"/>
+              </svg>
+            </div>
+          ) : (
+            <button 
+              className="clear-button" 
+              onClick={() => {
+                setQuery('');
+                setInputType('text');
+                setIsValid(null);
+                setInputMode(null);
+                setSuggestions([]);
+                setShowSuggestions(false);
+              }}
             >
-              {suggestion.fullName}
-            </li>
+              <svg viewBox="0 0 24 24">
+                <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z" />
+              </svg>
+            </button>
+          )
+        )}
+      </div>
+      
+      {/* Coloque as sugestões logo após o search-container para o efeito visual conectado */}
+      {(showSuggestions && suggestions.length > 0 && (isFocused || isLoading)) && (
+        <div className="search-suggestions">
+          <div className="suggestions-header"></div>
+          {suggestions.map((suggestion, index) => (
+            <div 
+              key={index} 
+              className="suggestion-item" 
+              onClick={() => applySuggestion(suggestion)}
+            >
+              <div 
+                className="suggestion-avatar" 
+                style={{ backgroundImage: `url(${suggestion.avatarUrl})` }}
+              ></div>
+              <div className="suggestion-content">
+                <div className="suggestion-name">{suggestion.fullName}</div>
+                <div className="suggestion-description">{suggestion.description}</div>
+              </div>
+            </div>
           ))}
-        </ul>
+        </div>
       )}
-
-      {results.length > 0 && (
-        <div className="results-container">
-          <h3>Resultados:</h3>
-          <ul>
-            {results.map((result) => (
-              <li key={result.id}>{result.name}</li>
-            ))}
-          </ul>
+      
+      {/* Resultados da busca */}
+      {results.length > 0 && !showSuggestions && (
+        <div className="search-results">
+          {results.map(user => (
+            <div key={user.id} className="search-result-item">
+              {user.nome}
+            </div>
+          ))}
         </div>
       )}
     </div>
